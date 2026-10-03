@@ -17,9 +17,27 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          server-id: central
-          server-username: SONATYPE_USERNAME
-          server-password: SONATYPE_PASSWORD
+
+      - name: Configure Maven settings.xml
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          mkdir -p ~/.m2
+          cat <<EOF > ~/.m2/settings.xml
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                        http://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>central</id>
+                <username>${SONATYPE_USERNAME}</username>
+                <password>${SONATYPE_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
 
       - name: Generate GPG Key & Distribute to Keyserver
         run: |
@@ -48,4 +66,6 @@ jobs:
         run: |
           mvn clean deploy -DskipTests \
             -Dgpg.keyFilePath=$(pwd)/secret-key.asc \
-            -Dgpg.signer=bc
+            -Dgpg.signer=bc \
+            -Dsonatype.username=$SONATYPE_USERNAME \
+            -Dsonatype.password=$SONATYPE_PASSWORD
