@@ -1,0 +1,51 @@
+name: Publish to Maven Central
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: central
+          server-username: SONATYPE_USERNAME
+          server-password: SONATYPE_PASSWORD
+
+      - name: Generate GPG Key & Distribute to Keyserver
+        run: |
+          cat <<EOF > gpg_batch
+          %no-protection
+          Key-Type: RSA
+          Key-Length: 3072
+          Subkey-Type: RSA
+          Subkey-Length: 3072
+          Name-Real: Ashiq Kodali
+          Name-Email: ashiq-kodali@users.noreply.github.com
+          Expire-Date: 0
+          %commit
+          EOF
+          gpg --batch --generate-key gpg_batch
+          KEY_ID=$(gpg --list-keys --with-colons | grep pub | head -n1 | cut -d: -f5)
+          echo "Generated Key ID: $KEY_ID"
+          gpg --keyserver keyserver.ubuntu.com --send-keys $KEY_ID
+          gpg --keyserver keys.openpgp.org --send-keys $KEY_ID || true
+          gpg --export-secret-keys --armor $KEY_ID > secret-key.asc
+
+      - name: Build, Sign & Deploy to Sonatype Central Portal
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+        run: |
+          mvn clean deploy -DskipTests \
+            -Dgpg.keyFilePath=$(pwd)/secret-key.asc \
+            -Dgpg.signer=bc
